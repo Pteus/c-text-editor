@@ -74,6 +74,13 @@ char editorReadKey(void) {
 }
 
 /*** output ***/
+void editorDrawRows(void) {
+  int y;
+  for (y = 0; y < 24; y++) {
+    write(STDOUT_FILENO, "~\r\n", 3);
+  }
+}
+
 // clear the screen
 void editorRefreshScreen(void) {
   // \x1b is the escape character - 27 in decimal
@@ -87,6 +94,9 @@ void editorRefreshScreen(void) {
   // The default arguments for H both happen to be 1, so we can leave both
   // arguments out and it will position the cursor at the first row and first
   // column, as if we had sent the <esc>[1;1H command
+  write(STDOUT_FILENO, "\x1b[H", 3);
+
+  editorDrawRows();
   write(STDOUT_FILENO, "\x1b[H", 3);
 }
 
