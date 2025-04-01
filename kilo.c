@@ -1,8 +1,10 @@
 /*** includes ***/
+#include <_stdio.h>
 #include <ctype.h>
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/errno.h>
 #include <sys/ioctl.h>
 #include <sys/ttycom.h>
@@ -114,34 +116,52 @@ int getWindowSize(int *rows, int *cols) {
   }
 }
 
+/*** append buffer ***/
+struct abuf {
+  char *b;
+  int len;
+};
+#define ABUF_INIT {NULL, 0}
+
+void abAppend(struct abuf *ab, const char *s, int len) {
+  // We ask realloc() to give us a block of memory that is the size of the
+  // current string plus the size of the string we are appending. realloc() will
+  // either extend the size of the block of memory we already have allocated, or
+  // it will take care of free()ing the current block of memory and allocating a
+  // new block of memory somewhere else that is big enough for our new string.
+  char *new = realloc(ab->b, ab->len + len);
+
+  if (new == NULL)
+    return;
+  // Copy the string s after the end of the current data in the buffer, and we
+  // update the pointer and length of the abuf to the new values.
+  memcpy(&new[ab->len], s, len);
+  ab->b = new;
+  ab->len += len;
+}
+
+void abFree(struct abuf *ab) { free(ab->b); }
+
 /*** output ***/
-void editorDrawRows(void) {
+void editorDrawRows(struct abuf *ab) {
   int y;
   for (y = 0; y < E.screenrows; y++) {
-    write(STDOUT_FILENO, "~", 1);
+    abAppend(ab, "~", 1);
     if (y < E.screenrows - 1) {
-      write(STDOUT_FILENO, "\r\n", 2);
+      abAppend(ab, "\r\n", 2);
     }
   }
 }
 
 // clear the screen
-void editorRefreshScreen(void) {
-  // \x1b is the escape character - 27 in decimal
-  // Escape sequences always start with an escape character (27) followed by a [
-  // character
-  // J - erase in display
-  // 2 - means all the screen
-  write(STDOUT_FILENO, "\x1b[2J", 4);
-
-  // H - cursor position
-  // The default arguments for H both happen to be 1, so we can leave both
-  // arguments out and it will position the cursor at the first row and first
-  // column, as if we had sent the <esc>[1;1H command
-  write(STDOUT_FILENO, "\x1b[H", 3);
-
-  editorDrawRows();
-  write(STDOUT_FILENO, "\x1b[H", 3);
+void editorRefreshScreen() {
+  struct abuf ab = ABUF_INIT;
+  abAppend(&ab, "\x1b[2J", 4);
+  abAppend(&ab, "\x1b[H", 3);
+  editorDrawRows(&ab);
+  abAppend(&ab, "\x1b[H", 3);
+  write(STDOUT_FILENO, ab.b, ab.len);
+  abFree(&ab);
 }
 
 /*** input ***/
