@@ -57,6 +57,39 @@ void enableRawMode(void) {
     die("tcsetattr");
 }
 
+char editorReadKey(void) {
+  int nread;
+  char c;
+
+  while ((nread = read(STDIN_FILENO, &c, 1)) != 1) {
+    if (nread == -1 && errno != EAGAIN)
+      die("read");
+  }
+
+  return c;
+}
+
+/*** output ***/
+// clear the screen
+void editorRefreshScreen(void) {
+  // \x1b is the escape character - 27 in decimal
+  // Escape sequences always start with an escape character (27) followed by a [
+  // character
+  // J - erase in display
+  // 2 - means all the screen
+  write(STDOUT_FILENO, "\x1b[2J", 4);
+}
+
+/*** input ***/
+void editorProcessKeypress(void) {
+  char c = editorReadKey();
+  switch (c) {
+  case CTRL_KEY('q'):
+    exit(0);
+    break;
+  }
+}
+
 /*** init ***/
 
 int main(void) {
@@ -68,18 +101,8 @@ int main(void) {
   // are no more bytes to read
   // press q to quit
   while (1) {
-    char c = '\0';
-    if (read(STDIN_FILENO, &c, 1) == -1 && errno != EAGAIN)
-      die("read");
-
-    if (iscntrl(c)) {
-      printf("%d\r\n", c);
-    } else {
-      printf("%d ('%c')\r\n", c, c);
-    }
-    if (c == CTRL_KEY('q')) {
-      break;
-    }
+    editorRefreshScreen();
+    editorProcessKeypress();
   }
   return 0;
 }
