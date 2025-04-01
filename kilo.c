@@ -4,6 +4,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/errno.h>
+#include <sys/ioctl.h>
+#include <sys/ttycom.h>
 #include <termios.h>
 #include <unistd.h>
 
@@ -11,7 +13,13 @@
 #define CTRL_KEY(k) ((k) & 0x1f)
 
 /*** data ***/
-struct termios orig_termios;
+struct editorConfig {
+  int screenRows;
+  int screenCols;
+  struct termios orig_termios;
+};
+
+struct editorConfig E;
 
 /*** terminal ***/
 void die(const char *s) {
@@ -25,19 +33,19 @@ void die(const char *s) {
 void disableRawMode(void) {
   // TCSAFLUSH - discards any unread input before applying the changes to the
   // terminal.
-  if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &orig_termios) == -1)
+  if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &E.orig_termios) == -1)
     die("tcsetattr");
 }
 
 void enableRawMode(void) {
   // Terminal attributes can be read into a termios struct by tcgetattr()
   // store original terminal settings
-  if (tcgetattr(STDIN_FILENO, &orig_termios) == -1)
+  if (tcgetattr(STDIN_FILENO, &E.orig_termios) == -1)
     die("tcgetattr");
 
   atexit(disableRawMode);
 
-  struct termios raw = orig_termios;
+  struct termios raw = E.orig_termios;
   // ECHO is a bitflag, defined as 00000000000000000000000000001000 in binary.
   // We use the bitwise-NOT operator (~) on this value to get
   // 11111111111111111111111111110111. We then bitwise-AND this value with the
@@ -73,10 +81,22 @@ char editorReadKey(void) {
   return c;
 }
 
+int getWindowSize(int *rows, int *cols) {
+  struct winsize ws;
+
+  if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1 || ws.ws_col == 0) {
+    return -1;
+  } else {
+    *cols = ws.ws_col;
+    *rows = ws.ws_row;
+    return 0;
+  }
+}
+
 /*** output ***/
 void editorDrawRows(void) {
   int y;
-  for (y = 0; y < 24; y++) {
+  for (y = 0; y < E.screenRows; y++) {
     write(STDOUT_FILENO, "~\r\n", 3);
   }
 }
@@ -116,10 +136,17 @@ void editorProcessKeypress(void) {
 
 /*** init ***/
 
+void initEditor(void) {
+  if (getWindowSize(&E.screenRows, &E.screenCols) == -1)
+    die("getWindowSize");
+}
+
 int main(void) {
   // terminal starts in canonical mode - the input is only sent to the program
   // when enter is pressed this enales raw mode.
   enableRawMode();
+
+  initEditor();
 
   // reads 1 byte from the standard input into c, and keeps doing it until there
   // are no more bytes to read
