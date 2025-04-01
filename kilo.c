@@ -15,6 +15,10 @@ struct termios orig_termios;
 
 /*** terminal ***/
 void die(const char *s) {
+  // clear the screen
+  write(STDOUT_FILENO, "\x1b[2J", 4);
+  write(STDOUT_FILENO, "\x1b[H", 3);
+
   perror(s);
   exit(1);
 }
@@ -78,6 +82,12 @@ void editorRefreshScreen(void) {
   // J - erase in display
   // 2 - means all the screen
   write(STDOUT_FILENO, "\x1b[2J", 4);
+
+  // H - cursor position
+  // The default arguments for H both happen to be 1, so we can leave both
+  // arguments out and it will position the cursor at the first row and first
+  // column, as if we had sent the <esc>[1;1H command
+  write(STDOUT_FILENO, "\x1b[H", 3);
 }
 
 /*** input ***/
@@ -85,6 +95,10 @@ void editorProcessKeypress(void) {
   char c = editorReadKey();
   switch (c) {
   case CTRL_KEY('q'):
+    // clear the screen
+    write(STDOUT_FILENO, "\x1b[2J", 4);
+    write(STDOUT_FILENO, "\x1b[H", 3);
+
     exit(0);
     break;
   }
